@@ -1,10 +1,11 @@
-#include <ADC.h>  // Teensy 3.1 uncomment this line and install http://github.com/pedvide/ADC
+//#include <ADC.h>  // Teensy 3.1 uncomment this line and install http://github.com/pedvide/ADC
 #include <MozziGuts.h>
 #include <Sample.h> // Sample template
 #include <samples/burroughs1_18649_int8.h>
 #include <mozzi_rand.h>
 #include <Line.h>
 #include <Smooth.h>
+//#define CONTROL_RATE 128
 
 // use: Sample <table_size, update_rate, interpolation > SampleName (wavetable)
 Sample <BURROUGHS1_18649_NUM_CELLS, AUDIO_RATE, INTERP_LINEAR> aSample(BURROUGHS1_18649_DATA);
@@ -19,16 +20,19 @@ int offset = 0;
 int offset_advance = -333; // just a guess
 
 // use this smooth out the wandering/jumping rate of scrubbing, gives more convincing reverses
-float smoothness = 0.9f;
+float smoothness = 0.9;
 Smooth <int> kSmoothOffsetAdvance(smoothness);
 
+#define DEBUG_PRINT 1
 
 void setup(){
     randSeed(); // fresh randomness
     aSample.setLoopingOn();
     startMozzi();
 
-    Serial.begin(9600);
+#if DEBUG_PRINT > 0
+    Serial.begin(115200);
+#endif
     pinMode(13, OUTPUT);
 }
 
@@ -36,45 +40,38 @@ void setup(){
 #define ENCODER_DO_NOT_USE_INTERRUPTS
 #include "Encoder_pullDown.h"
 
-Encoder myEnc(22, 23);
-long position = -999;
-long newPos;
+Encoder myEnc(2, 3);
+long position = 0;
+long newPos = 0;
 
 ///////////////////////////////////////////////////////////////////////////////
 
 void updateControl(){
 
-#if 0
-
     int delta = 0;
+    int smooth_offset_advance = 0;
+
     if (newPos != position)
     {
-        digitalWrite(13, !digitalRead(13));
+        digitalWrite(13, !digitalRead(3));
 
         delta = position - newPos;
-        delta = map(delta, -999, 999, -333, 333);
+        delta *= 60;
 
-        position = newPos;
-        Serial.print(delta);
+        smooth_offset_advance = kSmoothOffsetAdvance.next(delta);
+        if (abs(smooth_offset_advance) < 10)
+            smooth_offset_advance = 0;
+
+#if DEBUG_PRINT > 0
+        Serial.print("-900 900 ");
+        Serial.print(smooth_offset_advance);
         Serial.print(" ");
-        Serial.println(position);
+        Serial.println(delta);
+#endif
+        position = newPos;
     }
 
-    int smooth_offset_advance = kSmoothOffsetAdvance.next(delta);
-
     offset += smooth_offset_advance;
-
-#else // simulation
-
-    static int delta = 500;
-    delta = delta ? delta-10 : 500;
-    offset += delta;
-
-    Serial.print(delta);
-    Serial.print(" ");
-    Serial.println(offset);
-
-#endif
 
     // keep offset in range
     if (offset >= BURROUGHS1_18649_NUM_CELLS) offset -= BURROUGHS1_18649_NUM_CELLS;
